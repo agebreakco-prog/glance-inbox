@@ -12,7 +12,7 @@
 
 **Links:**
 
-- GitHub: `<repo URL>`
+- GitHub: https://github.com/agebreakco-prog/glance-inbox
 - Demo video: `<YouTube unlisted URL>`
 - `.ehpk` build: attached / in releases
 
