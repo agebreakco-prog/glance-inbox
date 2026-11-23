@@ -1,0 +1,20 @@
+{
+  "package_id": "com.glanceinbox.app",
+  "edition": "202601",
+  "name": "Glance Inbox",
+  "version": "0.1.0",
+  "min_sdk_version": "0.0.16",
+  "entrypoint": "index.html",
+  "permissions": [
+    {
+      "name": "network",
+      "desc": "Loads your picked Telegram chats and sends your replies through your own Glance Inbox server.",
+      "whitelist": ["https://glance-inbox.example.com"]
+    },
+    {
+      "name": "g2-microphone",
+      "desc": "Records a voice reply only while you press and hold, then sends it to your server for transcription."
+    }
+  ],
+  "supported_languages": ["en"]
+}
