@@ -11,6 +11,8 @@ and for the **Best Telegram integration** prize. It also uses Claude, which is t
 
 ![Glance Inbox running in the EvenHub simulator](docs/demo.gif)
 
+Demo video (1:40, recorded in the EvenHub simulator, demo mode): [docs/demo.mp4](docs/demo.mp4). Re-record it with `npm run video` while the server, dev server and simulator are running.
+
 ---
 
 ## Why

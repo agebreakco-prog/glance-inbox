@@ -16,7 +16,8 @@
     "pack": "npm run build && evenhub pack app.json dist -o glance-inbox.ehpk",
     "test": "node --test test/*.test.mjs",
     "capture": "node scripts/capture.mjs",
-    "sim:headless": "xvfb-run -a -s '-screen 0 1600x1000x24' node node_modules/@evenrealities/evenhub-simulator/bin/index.js http://localhost:5173 --automation-port 9898"
+    "sim:headless": "xvfb-run -a -s '-screen 0 1600x1000x24' node node_modules/@evenrealities/evenhub-simulator/bin/index.js http://localhost:5173 --automation-port 9898",
+    "video": "node scripts/record-video.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.13.0",
@@ -25,7 +26,9 @@
   "devDependencies": {
     "@evenrealities/evenhub-cli": "^0.2.0",
     "@evenrealities/evenhub-simulator": "^0.9.5",
+    "@napi-rs/canvas": "^1.2.0",
     "esbuild": "^0.21.5",
+    "ffmpeg-static": "^5.3.0",
     "gifenc": "^1.0.3",
     "pngjs": "^7.0.0",
     "typescript": "^5.7.0",
