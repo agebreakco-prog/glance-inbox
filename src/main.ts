@@ -13,13 +13,17 @@ import {
   waitForEvenAppBridge,
   type EvenAppBridge,
 } from '@evenrealities/even_hub_sdk';
-import { api } from './api.ts';
+import { ApiError, api } from './api.ts';
 import {
+  CLAIMED_OPTIONS,
   MENU,
   REPLY_EXTRA,
   busyPage,
+  cardBody,
+  cardFooter,
   cardHeader,
   cardPage,
+  claimedPage,
   confirmPage,
   digestPage,
   emptyPage,
@@ -29,6 +33,7 @@ import {
   sendingHeader,
   sendingPage,
   sentPage,
+  viewOnlyPage,
   type Msg,
   type Page,
 } from './screens.ts';
@@ -47,7 +52,7 @@ const seen = new Set<string>();
 const state = {
   unread: [] as Msg[],
   idx: 0,
-  version: -1,
+  version: -1 as number | string,
   current: null as Msg | null,
   drafts: [] as string[],
   source: 'rules',
@@ -117,6 +122,7 @@ function toContainers(p: Page) {
 
 async function show(p: Page) {
   page = p;
+  companion.currentId = state.current?.id || '';
   companion.render(p);
   const c = toContainers(p);
   if (!created) {
@@ -156,6 +162,12 @@ async function refresh(force = false) {
       if (page.key === 'card' && !force && keep !== null && keep !== undefined && keep >= 0) {
         // Same message still on screen: update the header in place (no flicker).
         // A newly arrived message is announced there for a moment, then the counter returns.
+        // The customer context line and "<name> is answering" are patched in place too.
+        state.current = state.unread[state.idx];
+        const bodyNow = cardBody(state.current);
+        const footNow = cardFooter(state.current);
+        if (page.texts.find(t => t.id === 2)?.content !== bodyNow) await patch(2, bodyNow);
+        if (page.texts.find(t => t.id === 3)?.content !== footNow) await patch(3, footNow);
         const header = () => cardHeader(state.idx, state.unread.length, state.unread[state.idx]);
         const fresh = state.unread.filter(m => !prevSeen.has(m.id));
         if (fresh.length) {
@@ -208,15 +220,41 @@ async function openReplies() {
   state.busy = true;
   await show(busyPage(`Reply to ${msg.from}`, 'Drafting replies…'));
   try {
+    // Asking for drafts claims the conversation for this wearer.
     const { drafts, source } = await api.drafts(msg.id);
     state.drafts = drafts;
     state.source = source;
     await show(repliesPage(msg, drafts, source));
   } catch (err) {
-    await show(errorPage((err as Error).message));
+    if (!(await showIfClaimed(msg, err))) await show(errorPage((err as Error).message));
   } finally {
     state.busy = false;
   }
+}
+
+/** Someone else is answering: show who, block the reply, offer view only. */
+async function showIfClaimed(msg: Msg, err: unknown) {
+  if (!(err instanceof ApiError) || err.status !== 409 || !err.claim) return false;
+  msg.claim = err.claim;
+  await show(claimedPage(msg, err.claim));
+  return true;
+}
+
+async function onClaimedSelected(index: number) {
+  const msg = state.current;
+  if (!msg) return showCard();
+  const option = CLAIMED_OPTIONS[index];
+  if (option === 'View only') return show(viewOnlyPage(msg, msg.claim));
+  if (option === 'Next message') {
+    if (state.idx < state.unread.length - 1) state.idx += 1;
+    return showCard();
+  }
+  return showCard();
+}
+
+/** Leave the reply flow without sending: free the conversation for colleagues. */
+function release(msg: Msg | null) {
+  if (msg) api.release(msg.id).catch(() => {});
 }
 
 async function onReplySelected(index: number) {
@@ -230,6 +268,7 @@ async function onReplySelected(index: number) {
     state.current = null;
     return refresh(true);
   }
+  release(msg);
   return showCard(); // Back
 }
 
@@ -260,6 +299,7 @@ async function sendNow(msg: Msg, text: string) {
       refresh(true);
     }, 1600);
   } catch (err) {
+    if (await showIfClaimed(msg, err)) return;
     await show(errorPage(`Not sent: ${(err as Error).message}`));
   }
 }
@@ -275,6 +315,11 @@ function cancelSend() {
 async function startListening() {
   const msg = state.current;
   if (!msg || state.listening) return;
+  try {
+    await api.claim(msg.id); // speaking a reply claims the conversation, like tapping reply
+  } catch (err) {
+    if (await showIfClaimed(msg, err)) return;
+  }
   state.listening = true;
   state.audio = [];
   let secs = 0;
@@ -296,7 +341,10 @@ async function stopListening(keep: boolean) {
   await bridge.audioControl(false);
   const msg = state.current;
   if (!msg) return;
-  if (!keep) return showCard();
+  if (!keep) {
+    release(msg);
+    return showCard();
+  }
   const total = state.audio.reduce((n, c) => n + c.length, 0);
   const pcm = new Uint8Array(total);
   let o = 0;
@@ -361,7 +409,18 @@ async function onGesture(g: Gesture) {
       if (g === 'double') return bridge.shutDownPageContainer(1);
       return;
     case 'replies':
+      if (g === 'double') {
+        release(state.current);
+        return showCard();
+      }
+      return;
+    case 'claimed':
       if (g === 'double') return showCard();
+      return;
+    case 'view':
+      if (g === 'tap' || g === 'double') return showCard();
+      if (g === 'down') return step(1);
+      if (g === 'up') return step(-1);
       return;
     case 'sending':
       if (g === 'double') return cancelSend();
@@ -372,7 +431,10 @@ async function onGesture(g: Gesture) {
       return;
     case 'confirm':
       if (g === 'tap' && state.current) return sendNow(state.current, state.pendingText);
-      if (g === 'double') return showCard();
+      if (g === 'double') {
+        release(state.current);
+        return showCard();
+      }
       return;
     case 'digest':
       if (g === 'tap' || g === 'double') return showCard();
@@ -405,6 +467,9 @@ function wireInput() {
       if (t === OsEventTypeList.DOUBLE_CLICK_EVENT) return void onGesture('double');
       if (t === OsEventTypeList.CLICK_EVENT && page.key === 'replies') {
         return void onReplySelected(ev.listEvent.currentSelectItemIndex ?? 0);
+      }
+      if (t === OsEventTypeList.CLICK_EVENT && page.key === 'claimed') {
+        return void onClaimedSelected(ev.listEvent.currentSelectItemIndex ?? 0);
       }
       return; // list scrolling is handled by the firmware
     }

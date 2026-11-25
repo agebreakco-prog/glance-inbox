@@ -22,8 +22,20 @@ export const companion = {
         companion.toast((e as Error).message);
       }
     });
+    // Demo: Lena, a second staff member, taps reply on the current customer chat.
+    $('demo-colleague')?.addEventListener('click', async () => {
+      try {
+        const r = await api.demoColleague(companion.currentId || undefined);
+        companion.toast(r.ok && r.claim ? `${r.claim.by} is now answering this chat` : 'Already taken by someone else');
+      } catch (e) {
+        companion.toast((e as Error).message);
+      }
+    });
     companion.outbox();
   },
+
+  /** Message on the glasses right now (set by main.ts), for the colleague demo button. */
+  currentId: '' as string,
 
   render(p: Page) {
     const el = $('mirror');
@@ -48,11 +60,18 @@ export const companion = {
     if (el) el.textContent = s;
   },
 
-  health(h: { mode: string; ai: string; stt: string }) {
+  health(h: { mode: string; ai: string; stt: string; customers?: string }) {
     const el = $('health');
-    if (el) el.innerHTML = `<b>${esc(h.mode)}</b> mode · AI: ${esc(h.ai)} · voice: ${esc(h.stt)}`;
-    const demo = $('demo-incoming');
-    if (demo) demo.hidden = h.mode !== 'demo';
+    if (el) {
+      el.innerHTML =
+        `<b>${esc(h.mode)}</b> mode · AI: ${esc(h.ai)} · voice: ${esc(h.stt)}` +
+        (h.customers ? ` · orders: ${esc(h.customers)}` : '') +
+        ` · you: ${esc(apiRef?.staffName || '')}`;
+    }
+    for (const id of ['demo-incoming', 'demo-colleague']) {
+      const b = $(id);
+      if (b) b.hidden = h.mode !== 'demo';
+    }
   },
 
   gesture(g: string) {
