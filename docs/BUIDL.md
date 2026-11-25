@@ -42,7 +42,15 @@ G2 can show the message privately, but there is no fast way to answer it from th
    - Press and hold, then speak.
    - The G2 mic PCM goes to your server for speech-to-text (any OpenAI-compatible endpoint, including local Whisper).
    - Claude tidies the transcript, and you tap to send.
-4. **Catch up.**
+4. **For shops: know the customer.**
+   - Next to a customer's message the card shows one line from the shop's order data, for example "Last order #1042 · 2 croissants · paid, pickup 15:00".
+   - The data comes from a JSON file, a webhook (`POST /api/shop/order`) or the shop's own API, keyed by Telegram user id.
+   - Claude's drafts can reference the order. The no-key rule fallback writes order-aware drafts too.
+5. **For teams: no double answers.**
+   - When two staff members open the same customer chat, the first to tap reply claims it.
+   - The other sees "Being answered by Lena", their reply is blocked, and they can view only.
+   - Claims end on send or after 2 minutes. Demo mode simulates the colleague.
+6. **Catch up.**
    - The contextual menu opens a 4-line digest of everything unread, most urgent first.
    - New messages are announced in the header without interrupting you.
 
@@ -60,7 +68,7 @@ It works with the temple touchpad and the R1 ring: tap, swipe, hold and menu.
   - structured JSON output, low effort, 8 s timeout;
   - **a local rule-based fallback**, so the app never hangs and works with no key at all.
 - **Tested in the official EvenHub simulator:**
-  - 12 automated tests (API end-to-end, Telegram mapping, layout limits);
+  - 24 automated tests (API end-to-end, Telegram mapping, layout limits, customer context providers, two-staff claim lock with expiry);
   - a scripted walkthrough that captures 13 simulator screenshots and a GIF.
 
 ## Safety and privacy
@@ -74,11 +82,15 @@ It works with the temple touchpad and the R1 ring: tap, swipe, hold and menu.
 
 ## Business potential
 
+**Who pays:** small shops selling through a Telegram bot, as a monthly add-on per bot.
+
 - A free personal version.
-- A paid "Business inbox" for shops and support teams on Telegram bots, with:
+- A paid "Business inbox" for shops and support teams on Telegram bots. Already built:
+  - the customer context line (last order on the card, and in Claude's drafts);
+  - several G2 wearers answering one bot, with a claim lock so a customer never gets two answers.
+- Next for the business tier:
   - shared templates;
   - business hours;
-  - several G2 wearers answering one bot;
   - an audit log.
 - The same pattern later extends to Discord, Slack and Gmail.
 
