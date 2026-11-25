@@ -72,7 +72,10 @@
     <div class="card">
       <div class="row" style="justify-content: space-between; margin-bottom: 6px">
         <h2 style="margin: 0">Sent from glasses</h2>
-        <button id="demo-incoming" hidden>Simulate incoming message</button>
+        <div class="row">
+          <button id="demo-incoming" hidden>Simulate incoming message</button>
+          <button id="demo-colleague" hidden>Colleague takes a chat</button>
+        </div>
       </div>
       <ul id="outbox"></ul>
     </div>
@@ -85,6 +88,7 @@
         <li>Press and hold: speak a reply, release to finish</li>
         <li>Menu: Digest · Refresh · Mark all read</li>
         <li>Double-tap: back / cancel · exit from the inbox</li>
+        <li>Shop bots: the card shows the customer's last order; "&lt;name&gt; is answering" means a colleague claimed the chat (view only)</li>
       </ul>
     </div>
 

@@ -26,6 +26,8 @@ are in. On G2 you glance at the message, tap, tap, and you are back.
 - People who live in Telegram work groups and want to stay reachable in meetings, while walking or while driving.
 - Small businesses that run orders or support through a Telegram bot (bakeries, shops, tutors). The owner answers customers while their hands are busy.
 
+**Who pays:** small shops selling through a Telegram bot, as a monthly add-on per bot (customer context + multi-staff claim lock). The personal inbox stays free.
+
 ## What it does
 
 | Action | Input | Result |
@@ -37,6 +39,8 @@ are in. On G2 you glance at the message, tap, tap, and you are back.
 | Digest | contextual menu, then Digest | Up to 4 lines covering everything unread, most urgent first |
 | Mark read / all read | reply list or menu | Clears without answering |
 | New message | nothing | The header announces "New: <sender>" without interrupting you |
+| Customer context (shops) | glance | One line under a customer's name: "Last order #1042 · 2 croissants · paid, pickup 15:00". Claude drafts can reference the order |
+| Claim lock (teams) | tap reply | The first staff member to tap reply claims the chat. Colleagues see "Being answered by <name>", their reply is blocked, and they can view only. Claims end on send or after 2 min |
 | Exit | double-tap on the inbox | Standard G2 exit |
 
 Design choices for the 576 x 288 monochrome display:
@@ -46,6 +50,47 @@ Design choices for the 576 x 288 monochrome display:
 - A plain-language hint line at the bottom.
 - In-place `textContainerUpgrade` for counters and countdowns, so the screen doesn't flicker.
 - Native list scrolling for the drafts.
+
+## For shops
+
+Many small shops take orders through a Telegram bot. Two additions make Glance Inbox work for them.
+
+### Customer context on the card
+
+When a message comes from a known customer, the card shows one extra line under their name:
+
+```
+Customer #4821
+▶ Last order #1042 · 2 croissants · paid, pickup 15:00
+
+Hi! Do you still have the rye loaf today?
+```
+
+- The line is at most 60 characters. It shares the card's ~170-character budget with the message, so the card never overflows the 576 x 288 display.
+- If the order changes while the card is on screen, the line is updated in place with `textContainerUpgrade`, without a page rebuild or flicker.
+- The line goes into the Claude draft prompt ("refer to the order where it helps, do not invent other order details"). Without an API key, the local rules still write order-aware drafts, for example "Add one to order #1042?" or "Yes, #1047 moved to 16:00".
+
+Where the data comes from (`server/customers.mjs`, pluggable providers keyed by Telegram user id or `@username`):
+
+| Source | Setting | Notes |
+|---|---|---|
+| JSON file | `CUSTOMER_CONTEXT_FILE=./customers.json` | Fill it by hand or from a script. It is re-read when it changes. See [`examples/customers.json`](examples/customers.json) |
+| Webhook | `SHOP_HOOK_TOKEN=...` | Your order system calls `POST /api/shop/order` with header `x-shop-token`. Body: `{"userId":"123456789","order":{"id":"1042","items":"2 croissants","status":"paid","pickup":"15:00"}}`. A known order id is updated in place. Writes go to the JSON file |
+| Your own API | `CUSTOMER_CONTEXT_URL=https://shop/lookup` | `GET ?user_id=<id>` returns the same JSON shape (or 404). Cached for 60 s |
+
+Record shape: `{ "name", "note", "line", "orders": [{ "id", "items", "status", "pickup", "total" }] }`. The last order is shown. `line` overrides the generated text.
+
+### Several staff on one bot: claim lock
+
+Two people (two G2 wearers, or a G2 and a second session) can read the same bot inbox. To stop them both answering the same customer:
+
+- The first one to **tap reply** (or hold to speak) claims the conversation (`server/claims.mjs`).
+- Everyone else sees "Lena is answering" in the card footer, updated in place within one poll.
+- If they tap anyway, they get a "Being answered by Lena" screen with **View only**, **Next message** and **Back**. Drafts, send and voice replies return HTTP 409 for them.
+- A claim ends when its holder sends, backs out, or after 2 minutes without activity (`CLAIM_TTL_MS`).
+- Each wearer has a stable random id per device and a display name from `VITE_STAFF_NAME` or `?staff=Name`.
+
+**In demo mode** a simulated colleague, Lena, is already answering Customer #4823 (her claim expires after 2 minutes, as a real one would). The companion page has a "Colleague takes a chat" button that makes Lena claim the chat on your glasses. `POST /api/demo/reset` starts over.
 
 ## Screenshots
 
@@ -71,6 +116,9 @@ The raw framebuffer is rendered green-on-black, the way G2 shows it.
                      (threaded)      drafts / digest / polish:                         G2 mic PCM ─▶ /api/voice-reply
                                        Claude (ANTHROPIC_API_KEY)
                                        └─ fallback: local rules
+                                     customer context: JSON file /
+                                       webhook / shop API (shops)
+                                     claim lock per chat (staff)
                                      STT: any OpenAI-compatible
                                        /audio/transcriptions (STT_URL)
 ```
@@ -85,7 +133,7 @@ The raw framebuffer is rendered green-on-black, the way G2 shows it.
   - API keys stay on the server and never ship in the `.ehpk`, as the hackathon rules require.
 - **AI** (`server/llm.mjs`):
   - Claude via the official `@anthropic-ai/sdk`, with structured JSON output, low effort, an 8 s timeout and server-side refusal fallbacks.
-  - Three prompts: reply drafts (with the last 6 messages of the chat as context), digest, and voice clean-up.
+  - Three prompts: reply drafts (with the last 6 messages of the chat as context, plus the customer's order line for shop bots), digest, and voice clean-up.
   - **Without a key, or on any error, it falls back to local rules** (`server/rules.mjs`), so the glasses never hang and the demo works offline.
 - **Voice** (`server/stt.mjs`): G2 PCM (16 kHz s16le) is wrapped as WAV and sent to any OpenAI-compatible transcription endpoint, for example a local whisper.cpp server. Demo mode uses canned transcripts.
 
@@ -136,7 +184,8 @@ A local `whisper.cpp` server keeps audio on your own machine.
 ## Tests
 
 ```bash
-npm test          # 12 tests: rules, store, Telegram mapping/allowlist/threading, HTTP API end-to-end, screen limits
+npm test          # 24 tests: rules, store, Telegram mapping/allowlist/threading, HTTP API end-to-end, screen limits,
+                  #   customer context (file/webhook/API providers, order-aware drafts), claim lock (two staff, expiry)
 npm run build     # tsc --noEmit + vite build
 npm run capture   # drives the simulator: 13 screenshots, demo GIF, companion screenshot
 ```
@@ -148,7 +197,8 @@ npm run capture   # drives the simulator: 13 screenshots, demo GIF, companion sc
 - **No secrets in the app package.** Tokens live in the server's `.env`. `.env` is git-ignored; only `.env.example` is committed.
 - The AI is told to keep replies short and to invent no facts or commitments.
 - The demo uses only fictional people and messages (`server/demo.mjs`). Demo replies are logged and never sent.
-- The Claude API receives only the message being answered and up to 6 earlier messages from the same chat. It receives nothing when no key is set.
+- The Claude API receives only the message being answered, up to 6 earlier messages from the same chat and, for shop customers, the one-line order summary. It receives nothing when no key is set.
+- Customer order data stays in the shop's own file or system. The webhook is off unless `SHOP_HOOK_TOKEN` is set. Claims are kept in memory only.
 
 ## API feature requests (optional deliverable)
 
@@ -178,7 +228,9 @@ src/main.ts         Glasses controller (events, pages, polling, voice)
 src/screens.ts      Pure layouts for 576 x 288
 src/api.ts          Backend client
 src/companion.ts    Phone-side mirror, sent log, demo button
-server/             Node backend: Telegram, Claude, rules, STT, demo data
+server/             Node backend: Telegram, Claude, rules, STT, demo data,
+                    customer context (customers.mjs), claim lock (claims.mjs)
+examples/           Sample customers.json for the customer context line
 scripts/capture.mjs Simulator automation: screenshots + GIF
 test/               node:test suites
 docs/               Screenshots, demo GIF, demo script, BUIDL text
