@@ -94,7 +94,7 @@ test('HTTP API end to end in demo mode', async t => {
   assert.equal(health.ai, 'rules');
 
   const inbox = await get('/api/inbox');
-  assert.equal(inbox.count, 4);
+  assert.equal(inbox.count, 5);
   const first = inbox.unread[0];
 
   const d = await post('/api/drafts', { id: first.id });
@@ -104,7 +104,7 @@ test('HTTP API end to end in demo mode', async t => {
   const sent = await post('/api/send', { id: first.id, text: d.drafts[0] });
   assert.equal(sent.ok, true);
   assert.equal(sent.delivered, false);
-  assert.equal((await get('/api/inbox')).count, 3);
+  assert.equal((await get('/api/inbox')).count, 4);
   assert.equal((await get('/api/outbox')).outbox[0].text, d.drafts[0]);
 
   const voice = await fetch(`${base}/api/voice-reply?id=${inbox.unread[1].id}`, { method: 'POST', body: new Uint8Array(3200) }).then(r => r.json());
@@ -114,7 +114,7 @@ test('HTTP API end to end in demo mode', async t => {
   assert.ok(digest.lines.length >= 1 && digest.lines.length <= 4);
 
   await post('/api/demo/incoming', {});
-  assert.equal((await get('/api/inbox')).count, 4);
+  assert.equal((await get('/api/inbox')).count, 5);
   await post('/api/read-all', {});
   assert.equal((await get('/api/inbox')).count, 0);
 
