@@ -53,6 +53,9 @@ export function createTelegram({ token, allowedChatIds, store, log = console.log
       chatId,
       chatTitle: chatTitle(m.chat),
       from,
+      // Telegram user id (and @username): the key for the shop's customer context.
+      fromId: m.from ? String(m.from.id) : chatId,
+      ...(m.from?.username ? { fromUsername: `@${m.from.username}` } : {}),
       text: m.text,
       date: m.date * 1000,
       telegramMessageId: m.message_id,

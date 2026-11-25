@@ -48,14 +48,31 @@ const stringList = (key, max) => ({
 });
 
 /**
+ * The user-turn prompt for reply drafts. Exported for tests.
  * @param {{ from: string, chatTitle: string, text: string }} msg
  * @param {{ from: string, text: string }[]} context earlier messages in the same chat, oldest first
+ * @param {string} [customerLine] shop order context, e.g. "Last order #1042 · 2 croissants · paid, pickup 15:00"
  */
-export async function llmDrafts(msg, context = []) {
+export function draftsPrompt(msg, context = [], customerLine = '') {
   const history = context.map(m => `${m.from}: ${m.text}`).join('\n');
+  const shop = customerLine
+    ? `This chat is a customer of my shop. From my order system: ${customerLine}\n` +
+      'Refer to the order (number, items, pickup time) where it helps. Do not invent other order details, prices or stock.\n'
+    : '';
+  return (
+    `Chat: ${msg.chatTitle}\n${shop}${history ? `Earlier:\n${history}\n` : ''}New message from ${msg.from}:\n"${msg.text}"\n\n` +
+    'Give exactly 3 reply options, each at most 40 characters.'
+  );
+}
+
+/**
+ * @param {{ from: string, chatTitle: string, text: string }} msg
+ * @param {{ from: string, text: string }[]} context earlier messages in the same chat, oldest first
+ * @param {string} [customerLine] shop order context line, if the sender is a known customer
+ */
+export async function llmDrafts(msg, context = [], customerLine = '') {
   const out = await askJson(
-    `Chat: ${msg.chatTitle}\n${history ? `Earlier:\n${history}\n` : ''}New message from ${msg.from}:\n"${msg.text}"\n\n` +
-      'Give exactly 3 reply options, each at most 40 characters.',
+    draftsPrompt(msg, context, customerLine),
     stringList('replies', 3),
   );
   const replies = out.replies.map(r => String(r).trim()).filter(Boolean).slice(0, 3);

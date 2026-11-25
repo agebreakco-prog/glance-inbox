@@ -54,15 +54,52 @@ const RULES = [
 ];
 
 /**
+ * Latest order from a customer-context record (server/customers.mjs), or null.
+ * @param {{ orders?: { id?: string|number, status?: string, pickup?: string }[] } | null | undefined} customer
+ */
+export const lastOrder = customer => (customer?.orders?.length ? customer.orders[customer.orders.length - 1] : null);
+
+const ORDER_TALK = /\b(order|pick ?up|collect|ready|instead|change|cancel|status|deliver|move)/i;
+const TIME = /\b(\d{1,2}[:.]\d{2}|\d{1,2}\s?(am|pm))\b/i;
+
+/**
+ * Order-aware drafts for shop bots, used when the customer has an order on file.
+ * @param {string} text
+ * @param {{ id?: string|number, status?: string, pickup?: string }} o
+ * @returns {string[] | null}
+ */
+function orderDrafts(text, o) {
+  const ref = o.id !== undefined && o.id !== '' ? `#${o.id}` : 'your order';
+  if (ORDER_TALK.test(text)) {
+    const time = text.match(TIME)?.[1];
+    if (time) {
+      return [`Yes, ${ref} moved to ${time}`, `${time} is tight, 30 min later ok?`, o.pickup ? `Sorry, only ${o.pickup} today` : 'Sorry, not possible today'];
+    }
+    return [
+      o.pickup ? `${ref} is ready at ${o.pickup}` : `${ref} is on its way`,
+      o.status ? `Yes, ${ref} is ${o.status}` : `Yes, ${ref} is confirmed`,
+      `Let me check ${ref} and reply`,
+    ];
+  }
+  return null;
+}
+
+/**
  * Three short reply suggestions for a message, chosen by simple intent rules.
+ * With a shop customer record, drafts can reference the latest order.
  * @param {{ text: string, from: string }} msg
+ * @param {{ orders?: { id?: string|number, status?: string, pickup?: string }[] } | null} [customer]
  * @returns {string[]}
  */
-export function ruleDrafts(msg) {
+export function ruleDrafts(msg, customer = null) {
   const text = (msg.text || '').trim();
   const who = firstName(msg.from);
+  const order = lastOrder(customer);
+  const fromOrder = order && orderDrafts(text, order);
+  if (fromOrder) return fromOrder.map(r => clip(r));
   const rule = RULES.find(r => r.test.test(text));
   const replies = rule ? rule.replies(who) : ['Got it, thanks!', 'Will reply properly soon', 'Can I call you later?'];
+  if (order && rule?.name === 'availability' && order.id !== undefined) replies[1] = `Add one to order #${order.id}?`;
   return replies.map(r => clip(r));
 }
 

@@ -4,7 +4,8 @@
 /**
  * @typedef {{
  *   id: string, chatId: string, chatTitle: string, from: string, text: string,
- *   date: number, read: boolean, telegramMessageId?: number, outgoing?: boolean
+ *   date: number, read: boolean, telegramMessageId?: number, outgoing?: boolean,
+ *   fromId?: string, fromUsername?: string
  * }} Message
  */
 
